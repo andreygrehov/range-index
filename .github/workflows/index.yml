@@ -43,6 +43,15 @@ jobs:
       - name: Official images
         run: ./official-images.py images.txt > official.txt && mv official.txt lists/ || echo "::warning::no list of official images"
 
+      # The official list already names the image behind each official
+      # repository's latest tag, under its version tag.
+      - name: Leave official images to their own list
+        run: |
+          if [ -s lists/official.txt ] && [ -s lists/top.txt ]; then
+            grep / lists/top.txt > top-only.txt || true
+            mv top-only.txt lists/top.txt
+          fi
+
       - name: Count
         run: ./images.sh | wc -l
 
