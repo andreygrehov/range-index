@@ -2,8 +2,9 @@ name: index
 
 # Builds the index of every layer of the images in images.txt that the
 # catalog does not hold yet, then runs each image once on amd64 and arm64 to
-# record a startup profile, and publishes both as release assets. Tags move as
-# images are rebuilt, so it runs every day. Docker Hub images are read through
+# record a startup profile the catalog does not hold yet, and publishes both as
+# release assets. Tags move as images are rebuilt, so it runs every day. Each
+# job takes one shard of the list. Docker Hub images are read through
 # mirror.gcr.io, which serves the same digests without Docker Hub's rate limit.
 on:
   schedule:
@@ -19,8 +20,12 @@ concurrency:
 
 jobs:
   index:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
 
@@ -39,9 +44,9 @@ jobs:
       - name: Index new layers
         env:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
-        # An image without a build for one platform is not a reason to skip
-        # publishing everything else.
-        run: ./range index $(sed 's/#.*//; s/|.*//' images.txt | xargs) -o out || echo "::warning::some images were not indexed"
+        # An image that fails, or a shard that runs long, is not a reason to
+        # skip publishing everything else.
+        run: timeout 290m ./range index --skip-published $(./images.sh ${{ matrix.shard }} 16 | cut -d'|' -f1) -o out || echo "::warning::some images were not indexed"
 
       - name: Publish
         env:
@@ -50,12 +55,14 @@ jobs:
 
   profile:
     needs: index
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
         runner: [ubuntu-latest, ubuntu-24.04-arm]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 300
+    timeout-minutes: 340
     steps:
       - uses: actions/checkout@v4
 
@@ -77,7 +84,7 @@ jobs:
       - name: Record startup profiles
         env:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
-        run: ./profile.sh out
+        run: timeout 290m ./profile.sh out ${{ matrix.shard }} 8 || echo "::warning::profiling stopped early"
 
       - name: Publish
         env:
