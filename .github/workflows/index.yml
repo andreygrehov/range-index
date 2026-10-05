@@ -39,7 +39,9 @@ jobs:
       - name: Index new layers
         env:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
-        run: ./range index $(sed 's/#.*//; s/|.*//' images.txt | xargs) -o out
+        # An image without a build for one platform is not a reason to skip
+        # publishing everything else.
+        run: ./range index $(sed 's/#.*//; s/|.*//' images.txt | xargs) -o out || echo "::warning::some images were not indexed"
 
       - name: Publish
         env:

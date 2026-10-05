@@ -34,7 +34,6 @@ traefik
 hello-world
 mariadb
 golang | go version
-openjdk | java -version
 registry
 debian
 ruby | ruby -e 0
@@ -45,7 +44,6 @@ haproxy
 influxdb
 nextcloud
 amazonlinux
-elasticsearch
 tomcat
 maven
 caddy
@@ -66,10 +64,8 @@ perl | perl -e 1
 nats
 percona
 composer
-kibana
 drupal
 couchdb
-logstash
 chronograf
 amazoncorretto | java -version
 rust | cargo --version
@@ -91,7 +87,7 @@ odoo
 jruby
 mediawiki
 jetty
-oraclelinux
+oraclelinux:9
 clojure
 pypy | pypy3 -c pass
 arangodb
