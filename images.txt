@@ -1,13 +1,105 @@
-# Images whose layers the catalog indexes, for linux/amd64 and linux/arm64.
-# One per line. Pin a tag that moves only when you mean it to.
-alpine:3.20
+# Images whose layers the catalog indexes, and whose startup it profiles, for
+# linux/amd64 and linux/arm64. One per line: IMAGE [| COMMAND].
+# COMMAND is what the profile records. Without one, it records a shell starting.
+
+# Pinned: the demos and the published measurements.
+python:3.12 | python3 -c pass
+python:3.12-slim | python3 -c pass
+python:3.13 | python3 -c pass
+node:22 | node -e 0
+golang:1.23 | go version
+rust:1.82 | cargo --version
+eclipse-temurin:21 | java -version
 ubuntu:24.04
 debian:bookworm
-python:3.12
-python:3.12-slim
-python:3.13
-node:22
-golang:1.23
-rust:1.82
-eclipse-temurin:21
-ghcr.io/ggml-org/llama.cpp:light-b11206
+alpine:3.20
+ghcr.io/ggml-org/llama.cpp:light-b11206 | llama-cli --version
+
+# The most pulled official images on Docker Hub, October 2026.
+nginx
+memcached
+busybox
+alpine
+postgres
+redis
+ubuntu
+python | python3 -c pass
+node | node -e 0
+mysql
+mongo
+httpd
+rabbitmq
+docker
+traefik
+hello-world
+mariadb
+golang | go version
+openjdk | java -version
+registry
+debian
+ruby | ruby -e 0
+wordpress
+php | php -v
+sonarqube
+haproxy
+influxdb
+nextcloud
+amazonlinux
+elasticsearch
+tomcat
+maven
+caddy
+eclipse-mosquitto
+telegraf
+bash
+adminer
+ghost
+kong
+zookeeper
+solr
+eclipse-temurin | java -version
+neo4j
+gradle
+cassandra
+buildpack-deps
+perl | perl -e 1
+nats
+percona
+composer
+kibana
+drupal
+couchdb
+logstash
+chronograf
+amazoncorretto | java -version
+rust | cargo --version
+matomo
+teamspeak
+fedora
+flink
+phpmyadmin
+couchbase
+joomla
+groovy
+rethinkdb
+rocket.chat
+redmine
+elixir
+erlang
+kapacitor
+odoo
+jruby
+mediawiki
+jetty
+oraclelinux
+clojure
+pypy | pypy3 -c pass
+arangodb
+ros
+swift
+xwiki
+archlinux
+gcc | gcc --version
+znc
+hylang
+tomee

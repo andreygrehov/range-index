@@ -1,9 +1,10 @@
 name: index
 
 # Builds the index of every layer of the images in images.txt that the
-# catalog does not hold yet, and publishes each one as a release asset.
-# Tags move as images are rebuilt, so it runs every day and indexes only the
-# new layers.
+# catalog does not hold yet, then runs each image once on amd64 and arm64 to
+# record a startup profile, and publishes both as release assets. Tags move as
+# images are rebuilt, so it runs every day. Docker Hub images are read through
+# mirror.gcr.io, which serves the same digests without Docker Hub's rate limit.
 on:
   schedule:
     - cron: "17 6 * * *"
@@ -36,9 +37,48 @@ jobs:
         run: cd range-src && CGO_ENABLED=0 go build -o ../range ./cmd/range
 
       - name: Index new layers
-        run: ./range index $(grep -v '^#' images.txt | grep .) -o out
+        env:
+          RANGE_REGISTRY_MIRROR: mirror.gcr.io
+        run: ./range index $(sed 's/#.*//; s/|.*//' images.txt | xargs) -o out
 
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./publish.sh out
+
+  profile:
+    needs: index
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: andreygrehov/range
+          path: range-src
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: range-src/go.mod
+
+      - name: Build range
+        run: cd range-src && CGO_ENABLED=0 go build -o ../range ./cmd/range
+
+      - name: Kernel modules
+        run: sudo modprobe nbd nbds_max=16 && sudo modprobe erofs && sudo modprobe overlay && sudo ./range doctor
+
+      - name: Record startup profiles
+        env:
+          RANGE_REGISTRY_MIRROR: mirror.gcr.io
+        run: ./profile.sh out
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./publish.sh out
+
