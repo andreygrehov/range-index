@@ -1,31 +1,48 @@
 #!/bin/bash
-# Uploads every index and profile under DIR to the release named by its shard:
-# the first two hex digits of the digest it is named by. A release holds at
-# most 1000 assets, and 256 shards keep each one far below that. Runners
-# publish at the same time, so a failed upload is retried, then left for the
-# next day's run.
+# Uploads every index and profile under DIR that the catalog does not hold yet
+# to the release named by its shard: the first two hex digits of the digest it
+# is named by. A release holds at most 1000 assets, and 256 shards keep each
+# one far below that.
+#
+# The workflow's token may make 1000 API requests an hour, so this checks
+# for a file through its download URL, which is not an API request, and
+# stops before the job's time runs out. What it leaves, the next run publishes.
 set -uo pipefail
-dir=${1:?usage: publish.sh DIR}
+dir=${1:?usage: publish.sh DIR [MINUTES]}
+deadline=$(( $(date +%s) + ${2:-300} * 60 ))
+catalog=https://github.com/andreygrehov/range-index/releases/download
 shopt -s nullglob
-count=0; failed=0
-for shard_dir in "$dir"/*/; do
-  shard=$(basename "$shard_dir")
-  files=("$shard_dir"*.idx "$shard_dir"*.profile.json)
-  [ ${#files[@]} -gt 0 ] || continue
-  if ! gh release view "$shard" >/dev/null 2>&1; then
+missing() {
+  local f=$1 shard; shard=$(basename "$(dirname "$f")")
+  curl -sfIL -o /dev/null "$catalog/$shard/$(basename "$f")" || echo "$f"
+}
+export -f missing; export catalog
+mapfile -t todo < <(find "$dir" -name '*.idx' -o -name '*.profile.json' | sort | xargs -P 16 -I{} bash -c 'missing "$@"' _ {} | sort)
+echo "${#todo[@]} file(s) not in the catalog yet"
+releases=$(gh release list --limit 1000 --json tagName --jq '.[].tagName')
+count=0; left=0
+upload() {
+  local shard=$1; shift
+  [ $# -gt 0 ] || return 0
+  if [ "$(date +%s)" -ge "$deadline" ]; then left=$((left + $#)); return; fi
+  if ! grep -qx "$shard" <<<"$releases"; then
     gh release create "$shard" --title "sha256:$shard" \
-      --notes "Range layer indexes and startup profiles for digests starting with sha256:$shard." 2>/dev/null ||
-      gh release view "$shard" >/dev/null
+      --notes "Range layer indexes and startup profiles for digests starting with sha256:$shard." >/dev/null
   fi
-  for attempt in 1 2 3 4 5; do
-    if gh release upload "$shard" "${files[@]}" --clobber; then
-      count=$((count + ${#files[@]})); break
+  for attempt in 1 2 3; do
+    if gh release upload "$shard" "$@" --clobber; then
+      count=$((count + $#)); return
     fi
-    if [ $attempt = 5 ]; then
-      failed=$((failed + ${#files[@]})); echo "::warning::could not publish shard $shard"
-    else
-      sleep $((attempt * 30))
-    fi
+    # A rate limit lifts within the hour.
+    if [ $attempt = 3 ]; then left=$((left + $#)); echo "::warning::could not publish shard $shard"; else sleep 600; fi
   done
+}
+# todo is sorted, so each shard's files are next to each other.
+current=""; files=()
+for f in "${todo[@]}"; do
+  shard=${f%/*}; shard=${shard##*/}
+  if [ "$shard" != "$current" ]; then upload "$current" "${files[@]}"; current=$shard; files=(); fi
+  files+=("$f")
 done
-echo "published $count file(s), $failed left for the next run"
+upload "$current" "${files[@]}"
+echo "published $count file(s), $left left for the next run"

@@ -4,8 +4,10 @@ name: index
 # catalog does not hold yet, then runs each image once on amd64 and arm64 to
 # record a startup profile the catalog does not hold yet, and publishes both as
 # release assets. Tags move as images are rebuilt, so it runs every day. Each
-# job takes one shard of the list. Docker Hub images are read through
-# mirror.gcr.io, which serves the same digests without Docker Hub's rate limit.
+# indexing and profiling job takes one shard of the list, and one job publishes
+# what they all made, since the workflow's token may make only 1000 API
+# requests an hour. Docker Hub images are read through mirror.gcr.io, which
+# serves the same digests without Docker Hub's rate limit.
 on:
   schedule:
     - cron: "17 6 * * *"
@@ -48,13 +50,34 @@ jobs:
         # skip publishing everything else.
         run: timeout 290m ./range index --skip-published $(./images.sh ${{ matrix.shard }} 16 | cut -d'|' -f1) -o out || echo "::warning::some images were not indexed"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: index-${{ matrix.shard }}
+          path: out
+          if-no-files-found: ignore
+          retention-days: 1
+
+  publish-indexes:
+    needs: index
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: index-*
+          path: out
+          merge-multiple: true
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./publish.sh out
+        run: ./publish.sh out 300
 
   profile:
-    needs: index
+    needs: publish-indexes
     if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
@@ -86,8 +109,28 @@ jobs:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
         run: timeout 290m ./profile.sh out ${{ matrix.shard }} 8 || echo "::warning::profiling stopped early"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: profile-${{ strategy.job-index }}
+          path: out
+          if-no-files-found: ignore
+          retention-days: 1
+
+  publish-profiles:
+    needs: profile
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: profile-*
+          path: out
+          merge-multiple: true
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./publish.sh out
-
+        run: ./publish.sh out 300
