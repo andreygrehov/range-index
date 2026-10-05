@@ -5,8 +5,9 @@ with the pull count after a tab. An image whose latest tag has no Linux build
 is printed with its most recently pushed stable tag that has one.
 
 Signed in (DOCKERHUB_USERNAME and DOCKERHUB_TOKEN set), Docker Hub's search
-lists the 2500 most pulled repositories in order, which reaches well below the
-thousandth image pushed in two years. Without them, search pages only 200
+lists the 2500 most pulled repositories in order, down to about 14 million
+pulls, and the images pulled a million times or more in the categories people
+open a shell in: languages, operating systems, machine learning, data science. Without them, search pages only 200
 results, so this asks many narrower questions and ranks what they turn up by
 exact pull count, and may miss a few.
 
@@ -93,8 +94,10 @@ def namespace(ns):
 # Words that mark a tag as a preview, a branch build or not for Linux.
 UNSTABLE = {"rc", "alpha", "beta", "dev", "nightly", "snapshot", "test", "sha256", "debug", "windows",
             "nanoserver", "ltsc", "ea", "head", "sha", "sig", "att", "sbom", "merge", "main", "master", "edge", "canary", "pr", "pre", "preview"}
-# A release: v1, 1.2, 1.2.3, optionally with one suffix such as -alpine.
-VERSION = re.compile(r"^v?\d+(\.\d+)*(-[a-z][a-z0-9.]*)?$")
+# A release: v1, 1.2, 1.2.3, optionally with suffixes such as -alpine or
+# -cu1281-ubuntu2404.
+# A number of five digits or more is a build or a date, not a version.
+VERSION = re.compile(r"^v?\d{1,4}(\.\d+)*(-[a-z0-9][a-z0-9.]*)*$")
 
 
 def stable(tag):
@@ -106,20 +109,56 @@ def linux(tag):
                for i in tag.get("images") or [])
 
 
+def all_tags(repo):
+    """Every tag of a Docker Hub repository, from the registry, which lists
+    them all at once and does not count it as a pull."""
+    out = subprocess.run(["curl", "-s", "--max-time", "60",
+                          f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull"],
+                         capture_output=True, text=True)
+    try:
+        token = json.loads(out.stdout)["token"]
+    except (ValueError, KeyError):
+        return []
+    out = subprocess.run(["curl", "-s", "--max-time", "120", "-H", f"Authorization: Bearer {token}",
+                          f"https://registry-1.docker.io/v2/{repo}/tags/list?n=100000"], capture_output=True, text=True)
+    try:
+        return json.loads(out.stdout).get("tags") or []
+    except ValueError:
+        return []
+
+
+def newest_release(tags):
+    """The highest release tag, preferring one without a suffix."""
+    releases = [t for t in tags if VERSION.match(t) and stable(t)]
+    key = lambda t: ([int(n) for n in re.findall(r"\d+", t.split("-")[0])], "-" not in t)
+    return max(releases, key=key, default=None)
+
+
 def reference(name):
     """The image reference to index: the name alone when its latest tag has a
-    Linux build, else the most recently pushed stable tag that has one."""
+    Linux build, else the newest release tag with one. A repository that
+    floods its recent tags with dev and nightly builds has its releases found
+    in the full tag list."""
     repo = name if "/" in name else f"library/{name}"
     latest = get(f"https://hub.docker.com/v2/repositories/{repo}/tags/latest")
     if latest and linux(latest):
         return name
-    data = get(f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=50&ordering=last_updated")
-    tags = [t for t in (data or {}).get("results", []) if linux(t) and stable(t["name"])]
-    # Prefer the newest release, then the newest tag that is not a commit hash.
-    for tag in tags:
-        if VERSION.match(tag["name"]):
-            return f"{name}:{tag['name']}"
-    for tag in tags:
+    recent = []
+    # Tags come newest first, so the first release is the newest. Ten pages
+    # is as deep as Docker Hub lets an anonymous client look.
+    for page in range(1, 11):
+        data = get(f"https://hub.docker.com/v2/repositories/{repo}/tags?page_size=100&page={page}&ordering=last_updated")
+        tags = [t for t in (data or {}).get("results", []) if linux(t) and stable(t["name"])]
+        for tag in tags:
+            if VERSION.match(tag["name"]):
+                return f"{name}:{tag['name']}"
+        recent += tags
+        if not (data or {}).get("next"):
+            break
+    release = newest_release(all_tags(repo))
+    if release:
+        return f"{name}:{release}"
+    for tag in recent:
         if not re.fullmatch(r"[0-9a-f]{7,64}", tag["name"]):
             return f"{name}:{tag['name']}"
     return None
@@ -141,23 +180,34 @@ def login():
         sys.exit("top-images: Docker Hub refused DOCKERHUB_USERNAME and DOCKERHUB_TOKEN")
 
 
+# Categories of images people open a shell in. In these, an image pulled a
+# million times counts, far below the cut of the overall ranking.
+ENVIRONMENTS = ["languages-and-frameworks", "operating-systems", "machine-learning-and-ai", "data-science"]
+
+
 def ranked(jwt):
     """Repositories in order of exact pull count, as signed-in search returns
-    them: the first 2500, the most it pages to. Pull counts show only as
-    buckets, so each gets its bucket."""
+    them: the first 2500 overall, the most it pages to, then those pulled a
+    million times or more in each category in ENVIRONMENTS. Pull counts show
+    only as buckets, so each gets its bucket."""
     headers = ["-H", f"Authorization: Bearer {jwt}"]
     repos = {}
-    for start in range(0, 2500, 100):
-        data = get(f"{SEARCH}&from={start}", headers)
-        for r in (data or {}).get("results", []):
-            # "name" is a display name for some images ("Python" for
-            # dhi/python); the repository record has the real one.
-            repo = (r.get("rate_plans") or [{}])[0].get("repositories", [{}])[0]
-            if r.get("archived") or not repo.get("name"):
-                continue
-            ns = repo.get("namespace", "library")
-            name = repo["name"] if ns == "library" else f"{ns}/{repo['name']}"
-            repos[name] = {"pull_count": bucket(r), "last_updated": repo.get("last_pushed_at") or r.get("updated_at")}
+    for query, floor in [("", 0)] + [(f"&categories={c}", 10**6) for c in ENVIRONMENTS]:
+        for start in range(0, 2500, 100):
+            data = get(f"{SEARCH}{query}&from={start}", headers)
+            results = (data or {}).get("results", [])
+            for r in results:
+                # "name" is a display name for some images ("Python" for
+                # dhi/python); the repository record has the real one.
+                repo = (r.get("rate_plans") or [{}])[0].get("repositories", [{}])[0]
+                if r.get("archived") or not repo.get("name") or bucket(r) < floor:
+                    continue
+                ns = repo.get("namespace", "library")
+                name = repo["name"] if ns == "library" else f"{ns}/{repo['name']}"
+                repos.setdefault(name, {"pull_count": bucket(r),
+                                        "last_updated": repo.get("last_pushed_at") or r.get("updated_at")})
+            if len(results) < 100 or (results and bucket(results[-1]) < floor):
+                break
     return repos
 
 

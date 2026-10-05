@@ -38,7 +38,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           mkdir -p lists
-          ./top-images.py 2000 > top.tsv && cut -f1 top.tsv > lists/top.txt || echo "::warning::no list of the most pulled images"
+          ./top-images.py 5000 > top.tsv && cut -f1 top.tsv > lists/top.txt || echo "::warning::no list of the most pulled images"
 
       - name: Official images
         run: ./official-images.py images.txt > official.txt && mv official.txt lists/ || echo "::warning::no list of official images"
