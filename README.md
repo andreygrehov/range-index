@@ -1,7 +1,8 @@
 # range-index
 
 Layer indexes and startup profiles for [Range](https://github.com/andreygrehov/range),
-so the first run of the 1000 most pulled container images is lazy for everyone.
+so the first run of a popular container image is lazy for everyone: the most
+pulled images on Docker Hub and every official image, at every version.
 
 The first time Range opens a container image, it reads each layer once to index
 it: where every file starts in the layer, and the points to resume gzip or zstd
@@ -37,12 +38,19 @@ against a SHA-256 for each 64 KiB in the index. An index holds short runs of a
 layer's uncompressed bytes, the 32 KiB window before each checkpoint, so this
 catalog covers public images only.
 
-## Adding an image
+## Which images
 
-Add it to [images.txt](images.txt). [top-images.py](top-images.py) lists the
-most pulled images on Docker Hub. The [index workflow](.github/workflows/index.yml)
-runs every day, indexes only the layers the catalog does not hold yet, records
-the profiles it does not hold yet, and publishes them. To build indexes yourself:
+Every night the [index workflow](.github/workflows/index.yml) lists:
+
+- Of the 2500 most pulled repositories on Docker Hub, each one pushed in the
+  last two years. [top-images.py](top-images.py) makes this list.
+- Every image that Docker's official images build, one tag for each image.
+  [official-images.py](official-images.py) makes this list.
+- The images in [images.txt](images.txt).
+
+It indexes the layers the catalog does not hold yet, records the profiles it
+does not hold yet, and publishes them. To add an image, add it to images.txt.
+To build indexes yourself:
 
 ```
 range index python:3.12 --platform linux/amd64,linux/arm64 -o out

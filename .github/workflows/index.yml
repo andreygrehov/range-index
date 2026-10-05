@@ -1,7 +1,8 @@
 name: index
 
-# Builds the index of every layer of the images in images.txt that the
-# catalog does not hold yet, then runs each image once on amd64 and arm64 to
+# Lists the images to cover: images.txt, the most pulled images on Docker Hub
+# and every official image. Then builds the index of every layer of them that
+# the catalog does not hold yet, then runs each image once on amd64 and arm64 to
 # record a startup profile the catalog does not hold yet, and publishes both as
 # release assets. Tags move as images are rebuilt, so it runs every day. Each
 # indexing and profiling job takes one shard of the list, and one job publishes
@@ -10,7 +11,9 @@ name: index
 # serves the same digests without Docker Hub's rate limit.
 on:
   schedule:
-    - cron: "17 6 * * *"
+    # 23:07 in New York in summer, 22:07 in winter: publishing stops at 9:00
+    # there on weekdays, so the night is the time the run has.
+    - cron: "7 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -21,7 +24,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  lists:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      # Each list is optional: if Docker Hub or GitHub does not answer, the
+      # run covers the others.
+      - name: Most pulled images
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          mkdir -p lists
+          ./top-images.py 2000 > top.tsv && cut -f1 top.tsv > lists/top.txt || echo "::warning::no list of the most pulled images"
+
+      - name: Official images
+        run: ./official-images.py images.txt > official.txt && mv official.txt lists/ || echo "::warning::no list of official images"
+
+      - name: Count
+        run: ./images.sh | wc -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lists
+          path: lists
+          retention-days: 1
+
   index:
+    needs: lists
     strategy:
       fail-fast: false
       matrix:
@@ -42,6 +74,11 @@ jobs:
 
       - name: Build range
         run: cd range-src && CGO_ENABLED=0 go build -o ../range ./cmd/range
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: lists
+          path: lists
 
       - name: Index new layers
         env:
@@ -83,7 +120,7 @@ jobs:
       fail-fast: false
       matrix:
         runner: [ubuntu-latest, ubuntu-24.04-arm]
-        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 340
     steps:
@@ -101,13 +138,18 @@ jobs:
       - name: Build range
         run: cd range-src && CGO_ENABLED=0 go build -o ../range ./cmd/range
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: lists
+          path: lists
+
       - name: Kernel modules
         run: sudo modprobe nbd nbds_max=16 && sudo modprobe erofs && sudo modprobe overlay && sudo ./range doctor
 
       - name: Record startup profiles
         env:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
-        run: timeout 290m ./profile.sh out ${{ matrix.shard }} 8 || echo "::warning::profiling stopped early"
+        run: timeout 290m ./profile.sh out ${{ matrix.shard }} 16 || echo "::warning::profiling stopped early"
 
       - uses: actions/upload-artifact@v4
         with:
