@@ -28,20 +28,44 @@ office_hours() {
   [ "$day" -le 5 ] && [ "$((10#$hour))" -ge 9 ] && [ "$((10#$hour))" -lt 18 ]
 }
 count=0; left=0
+# Waits until the API rate limit resets, or returns at once if it has not run out.
+wait_for_rate_limit() {
+  local remaining reset now
+  read -r remaining reset < <(gh api rate_limit --jq '.resources.core | "\(.remaining) \(.reset)"' 2>/dev/null || echo "1 0")
+  now=$(date +%s)
+  if [ "${remaining:-1}" -eq 0 ] && [ "${reset:-0}" -gt "$now" ]; then
+    # Never past the deadline: the job must still end on its own.
+    [ "$reset" -lt "$deadline" ] || reset=$deadline
+    echo "rate limit reached, waiting $(( (reset - now) / 60 + 1 )) min"
+    sleep $(( reset - now + 5 ))
+  fi
+}
 upload() {
   local shard=$1; shift
-  [ $# -gt 0 ] || return 0
-  if [ "$(date +%s)" -ge "$deadline" ] || office_hours; then left=$((left + $#)); return; fi
+  local files=("$@") tries=0 f
+  [ ${#files[@]} -gt 0 ] || return 0
   if ! grep -qx "$shard" <<<"$releases"; then
+    wait_for_rate_limit
     gh release create "$shard" --title "sha256:$shard" \
       --notes "Range layer indexes and startup profiles for digests starting with sha256:$shard." >/dev/null
   fi
-  for attempt in 1 2 3; do
-    if gh release upload "$shard" "$@" --clobber; then
-      count=$((count + $#)); return
+  while [ ${#files[@]} -gt 0 ]; do
+    if [ "$(date +%s)" -ge "$deadline" ] || office_hours || [ $tries -ge 5 ]; then
+      left=$((left + ${#files[@]})); [ $tries -ge 5 ] && echo "::warning::could not publish shard $shard"
+      return
     fi
-    # A rate limit lifts within the hour.
-    if [ $attempt = 3 ]; then left=$((left + $#)); echo "::warning::could not publish shard $shard"; else sleep 600; fi
+    wait_for_rate_limit
+    if gh release upload "$shard" "${files[@]}" --clobber; then
+      count=$((count + ${#files[@]})); return
+    fi
+    # An upload stops at the first failure: retry only the files that are
+    # still not there, so none is uploaded twice.
+    tries=$((tries + 1))
+    local still=()
+    for f in "${files[@]}"; do
+      curl -sfIL -o /dev/null "$catalog/$shard/$(basename "$f")" || still+=("$f")
+    done
+    count=$((count + ${#files[@]} - ${#still[@]})); files=("${still[@]}")
   done
 }
 # todo is sorted, so each shard's files are next to each other.
