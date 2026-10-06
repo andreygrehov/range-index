@@ -11,8 +11,11 @@ name: index
 # serves the same digests without Docker Hub's rate limit.
 on:
   schedule:
-    # 23:07 in New York in summer, 22:07 in winter: publishing stops at 9:00
-    # there on weekdays, so the night is the time the run has.
+    # 20:37 and 23:07 in New York in summer, an hour earlier in winter:
+    # publishing stops at 9:00 there on weekdays, so the night is the time a
+    # run has. GitHub can start a scheduled run hours late, so there are two;
+    # the second waits for the first and publishes what is left.
+    - cron: "37 0 * * *"
     - cron: "7 3 * * *"
   workflow_dispatch:
 
