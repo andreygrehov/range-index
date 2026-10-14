@@ -4,7 +4,8 @@ name: index
 # and every official image. Then builds the index of every layer of them that
 # the catalog does not hold yet, then runs each image once on amd64 and arm64 to
 # record a startup profile the catalog does not hold yet, and publishes both as
-# release assets. Tags move as images are rebuilt, so it runs every day. Each
+# release assets. From the indexes it also builds the command map, which says
+# which image holds each command, and publishes its shards, then its root. Tags move as images are rebuilt, so it runs every day. Each
 # indexing and profiling job takes one shard of the list, and one job publishes
 # what they all made, since the workflow's token may make only 1000 API
 # requests an hour. Docker Hub images are read through mirror.gcr.io, which
@@ -45,6 +46,13 @@ jobs:
 
       - name: Official images
         run: ./official-images.py images.txt > official.txt && mv official.txt lists/ || echo "::warning::no list of official images"
+
+      # The command map ranks images by pulls: the most pulled list has its
+      # counts, and the official images need theirs.
+      - name: Pull counts
+        run: |
+          [ -s top.tsv ] && cp top.tsv lists/top-pulls.tsv
+          [ -s lists/official.txt ] && ./pulls.py lists/official.txt > lists/official-pulls.tsv || echo "::warning::no pull counts of official images"
 
       # The official list already names the image behind each official
       # repository's latest tag, under its version tag.
@@ -124,6 +132,47 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./publish.sh out 300
+
+  commands:
+    needs: publish-indexes
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: andreygrehov/range
+          path: range-src
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: range-src/go.mod
+
+      - name: Build range
+        run: cd range-src && CGO_ENABLED=0 go build -o ../range ./cmd/range
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: lists
+          path: lists
+
+      # Reads only the layer indexes the catalog published, never a layer.
+      - name: Build the command map
+        env:
+          RANGE_REGISTRY_MIRROR: mirror.gcr.io
+        run: |
+          ./images.sh | cut -d'|' -f1 > all.txt
+          cat lists/*.tsv > pulls.tsv 2>/dev/null || true
+          ./range commands build --list all.txt --pulls pulls.tsv --pins pins.txt -o map
+
+      # Shards first, the root last: a client never sees a root whose shards
+      # are missing.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./publish.sh map 60 && ./publish-root.sh map
 
   profile:
     needs: publish-indexes

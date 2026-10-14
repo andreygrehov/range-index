@@ -30,6 +30,29 @@ Range looks here when it has no index of its own for a layer. A missing entry
 means Range indexes the layer itself, as before. `RANGE_INDEX_URL` points Range
 at another catalog, and `RANGE_INDEX_URL=off` turns the catalog off.
 
+## The command map
+
+The map says which image holds each command, so Range can run a command this
+machine does not have from the image that brought it: `pdflatex` from
+`texlive/texlive`, `nvcc` from `nvidia/cuda`. The catalog builds it every day
+from the layer indexes above, without reading a layer, and publishes it as a
+small root and shards named by their content:
+
+```
+https://github.com/andreygrehov/range-index/releases/download/commands/commands.json
+https://github.com/andreygrehov/range-index/releases/download/<ab>/sha256-<ab...>.commands.json.gz
+```
+
+The first hex digits of the SHA-256 of a command's name pick its shard, and
+the root names the shard for each prefix. A client fetches the root,
+then the one shard it needs, and keeps both: a shard never changes. The shards
+go up first and the root last, so a client never sees a root whose shards are
+missing. `range commands which pdflatex` shows what the map says.
+
+A command belongs to the image that brought it, not to every image built on
+that one: `pip` is `python`'s, though hundreds of images carry it. Where the
+data cannot choose, such as `java`, [pins.txt](pins.txt) decides.
+
 ## What Range checks
 
 An index is used only when it names the same layer digest and size as the

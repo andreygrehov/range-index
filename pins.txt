@@ -1,0 +1,21 @@
+# Decisions the command map cannot make from data, as COMMAND REPOSITORY,
+# and !COMMAND for a command it leaves out. The map gives every other command
+# to the image that brought it; see `range commands build`.
+
+# Several images are equally the command's: one is the usual choice.
+java    eclipse-temurin
+javac   eclipse-temurin
+jshell  eclipse-temurin
+
+# No image is named for these: the smallest general one has them all.
+git     buildpack-deps
+curl    buildpack-deps
+wget    buildpack-deps
+make    buildpack-deps
+
+# Daemons and system tools, which do nothing useful in a session of their own.
+!systemctl
+!dockerd
+!containerd
+!sshd
+!init
