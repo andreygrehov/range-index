@@ -1,6 +1,12 @@
-# Decisions the command map cannot make from data, as COMMAND REPOSITORY,
-# and !COMMAND for a command it leaves out. The map gives every other command
-# to the image that brought it; see `range commands build`.
+# Decisions the command map cannot make from data: COMMAND REPOSITORY puts a
+# repository first for a command, * REPOSITORY makes a repository the home of
+# every command it brings, and !COMMAND leaves a command out. The map gives
+# every other command to the image that brought it; see `range commands build`.
+
+# Homes: their commands are many, and none is named for the repository.
+* texlive/texlive
+* nvidia/cuda
+* mcr.microsoft.com/dotnet/sdk
 
 # Several images are equally the command's: one is the usual choice.
 java    eclipse-temurin

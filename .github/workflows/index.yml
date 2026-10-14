@@ -98,6 +98,15 @@ jobs:
           name: lists
           path: lists
 
+      # Range signs in to Docker Hub through Docker's login, under the
+      # account's rate limit rather than an anonymous one.
+      - name: Docker Hub login
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [ -n "$DOCKERHUB_TOKEN" ] && echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin || echo "::warning::no Docker Hub login"
+
       - name: Index new layers
         env:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
@@ -157,6 +166,15 @@ jobs:
           path: lists
 
       # Reads only the layer indexes the catalog published, never a layer.
+      # Range signs in to Docker Hub through Docker's login, under the
+      # account's rate limit rather than an anonymous one.
+      - name: Docker Hub login
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [ -n "$DOCKERHUB_TOKEN" ] && echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin || echo "::warning::no Docker Hub login"
+
       - name: Build the command map
         env:
           RANGE_REGISTRY_MIRROR: mirror.gcr.io
@@ -204,6 +222,15 @@ jobs:
 
       - name: Kernel modules
         run: sudo modprobe nbd nbds_max=16 && sudo modprobe erofs && sudo modprobe overlay && sudo ./range doctor
+
+      # Range signs in to Docker Hub through Docker's login, under the
+      # account's rate limit rather than an anonymous one.
+      - name: Docker Hub login
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          [ -n "$DOCKERHUB_TOKEN" ] && echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin || echo "::warning::no Docker Hub login"
 
       - name: Record startup profiles
         env:

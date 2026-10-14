@@ -32,3 +32,20 @@ amazoncorretto | java -version
 rust | cargo --version
 pypy | pypy3 -c pass
 gcc | gcc --version
+
+# Tools for the command map: images that are a command's home, where the most
+# pulled list misses them, and ones from registries other than Docker Hub.
+texlive/texlive:latest | pdflatex --version
+nvidia/cuda:12.8.0-devel-ubuntu24.04 | nvcc --version
+nvidia/cuda:12.6.3-devel-ubuntu24.04 | nvcc --version
+ghcr.io/jqlang/jq:latest | jq --version
+mcr.microsoft.com/dotnet/sdk:8.0 | dotnet --version
+mcr.microsoft.com/dotnet/sdk:9.0 | dotnet --version
+hashicorp/terraform:latest | terraform version
+curlimages/curl:latest | curl --version
+alpine/git:latest | git --version
+mikefarah/yq:latest | yq --version
+koalaman/shellcheck:stable | shellcheck --version
+hadolint/hadolint:latest | hadolint --version
+pandoc/core:latest | pandoc --version
+jrottenberg/ffmpeg:latest | ffmpeg -version
