@@ -49,6 +49,10 @@ then the one shard it needs, and keeps both: a shard never changes. The shards
 go up first and the root last, so a client never sees a root whose shards are
 missing. `range commands which pdflatex` shows what the map says.
 
+The catalog signs the root with an Ed25519 key that Range trusts, so a mirror
+or a proxy cannot change which image a command runs from. The signature is the
+root's last member, over the exact bytes before it.
+
 A command belongs to the image that brought it, not to every image built on
 that one: `pip` is `python`'s, though hundreds of images carry it. Where the
 data cannot choose, such as `java`, [pins.txt](pins.txt) decides.
