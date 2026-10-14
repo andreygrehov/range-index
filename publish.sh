@@ -6,8 +6,8 @@
 #
 # The workflow's token may make 1000 API requests an hour, so this checks
 # for a file through its download URL, which is not an API request, and
-# stops before the job's time runs out. It also stops from 9:00 to 18:00 New
-# York time on weekdays. What it leaves, the next run publishes.
+# stops before the job's time runs out. What it leaves, the next run
+# publishes.
 set -uo pipefail
 dir=${1:?usage: publish.sh DIR [MINUTES]}
 deadline=$(( $(date +%s) + ${2:-300} * 60 ))
@@ -21,12 +21,6 @@ export -f missing; export catalog
 mapfile -t todo < <(find "$dir" -name '*.idx' -o -name '*.profile.json' -o -name '*.commands.json.gz' | sort | xargs -P 16 -I{} bash -c 'missing "$@"' _ {} | sort)
 echo "${#todo[@]} file(s) not in the catalog yet"
 releases=$(gh release list --limit 1000 --json tagName --jq '.[].tagName')
-# Weekdays, 9:00 to 17:59 in New York.
-office_hours() {
-  local day hour
-  read -r day hour < <(TZ=America/New_York date '+%u %H')
-  [ "$day" -le 5 ] && [ "$((10#$hour))" -ge 9 ] && [ "$((10#$hour))" -lt 18 ]
-}
 count=0; left=0
 # Waits until the API rate limit resets, or returns at once if it has not run out.
 wait_for_rate_limit() {
@@ -50,7 +44,7 @@ upload() {
       --notes "Range layer indexes and startup profiles for digests starting with sha256:$shard." >/dev/null
   fi
   while [ ${#files[@]} -gt 0 ]; do
-    if [ "$(date +%s)" -ge "$deadline" ] || office_hours || [ $tries -ge 5 ]; then
+    if [ "$(date +%s)" -ge "$deadline" ] || [ $tries -ge 5 ]; then
       left=$((left + ${#files[@]})); [ $tries -ge 5 ] && echo "::warning::could not publish shard $shard"
       return
     fi

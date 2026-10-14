@@ -2,17 +2,11 @@
 # Publishes the command map's root, DIR/commands/commands.json, as the asset
 # commands.json of the release "commands". The root names every shard of one
 # version of the map, so it goes last, and only once each shard it names is
-# in the catalog: a client never sees a root whose shards are missing. Like
-# publish.sh, it does nothing from 9:00 to 18:00 New York time on weekdays.
+# in the catalog: a client never sees a root whose shards are missing.
 set -euo pipefail
 dir=${1:?usage: publish-root.sh DIR}
 root=$dir/commands/commands.json
 catalog=https://github.com/andreygrehov/range-index/releases/download
-read -r day hour < <(TZ=America/New_York date '+%u %H')
-if [ "$day" -le 5 ] && [ "$((10#$hour))" -ge 9 ] && [ "$((10#$hour))" -lt 18 ]; then
-  echo "office hours in New York: the root waits for the next run"
-  exit 0
-fi
 missing=0
 while read -r digest; do
   hex=${digest#sha256:}
