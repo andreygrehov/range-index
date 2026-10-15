@@ -1,7 +1,24 @@
 # Decisions the command map cannot make from data: COMMAND REPOSITORY puts a
 # repository first for a command, * REPOSITORY makes a repository the home of
-# every command it brings, and !COMMAND leaves a command out. The map gives
-# every other command to the image that brought it; see `range commands build`.
+# every command it brings, + REPOSITORY or + NAMESPACE/* trusts it for a
+# session, and !COMMAND leaves a command out. The map gives every other
+# command to the image that brought it; see `range commands build`.
+
+# Trusted: a session runs commands from these unasked, besides official
+# images. They are the tool's own publishers.
++ nvidia/cuda
++ texlive/texlive
++ ghcr.io/jqlang/*
++ mcr.microsoft.com/*
++ hashicorp/*
++ amazon/aws-cli
++ curlimages/curl
++ alpine/git
++ mikefarah/yq
++ koalaman/shellcheck
++ hadolint/hadolint
++ pandoc/*
++ jrottenberg/ffmpeg
 
 # Homes: their commands are many, and none is named for the repository.
 * texlive/texlive
