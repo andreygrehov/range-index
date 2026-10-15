@@ -49,3 +49,24 @@ koalaman/shellcheck:stable | shellcheck --version
 hadolint/hadolint:latest | hadolint --version
 pandoc/core:latest | pandoc --version
 jrottenberg/ffmpeg:latest | ffmpeg -version
+
+# Versions for command@version, RANGE_USE and project files in a session: an
+# indexed tag opens at once, any other is indexed on the machine first.
+golang:1.21 | go version
+golang:1.22 | go version
+golang:1.24 | go version
+golang:1.25 | go version
+golang:1.26 | go version
+python:3.10 | python3 -c pass
+python:3.11 | python3 -c pass
+python:3.14 | python3 -c pass
+node:18 | node -e 0
+node:20 | node -e 0
+node:24 | node -e 0
+rust:1.85 | cargo --version
+rust:1.90 | cargo --version
+rust:1.95 | cargo --version
+gcc:13 | gcc --version
+gcc:14 | gcc --version
+gcc:15 | gcc --version
+ruby:3.3 | ruby --version
